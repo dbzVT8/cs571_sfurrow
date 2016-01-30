@@ -51,7 +51,6 @@
 #include <version.h>
 #include "autoconf.h"  // for pseudoconfig
 
-
 /*
  * These two pieces of data are maintained by the makefiles and build system.
  * buildconfig is the name of the config file the kernel was configured with.
@@ -63,6 +62,7 @@
  */
 extern const int buildversion;
 extern const char buildconfig[];
+extern void hello(void);
 
 /*
  * Copyright message for the OS/161 base code.
@@ -138,6 +138,7 @@ boot(void)
 	 */
 	COMPILE_ASSERT(sizeof(userptr_t) == sizeof(char *));
 	COMPILE_ASSERT(sizeof(*(userptr_t)0) == sizeof(char));
+    hello();
 }
 
 /*
@@ -205,6 +206,7 @@ sys_reboot(int code)
  * Kernel main. Boot up, then fork the menu thread; wait for a reboot
  * request, and then shut down.
  */
+
 void
 kmain(char *arguments)
 {
