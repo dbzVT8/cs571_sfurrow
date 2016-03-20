@@ -32,17 +32,75 @@
 #include <clock.h>
 #include <thread.h>
 #include <test.h>
+#include <synch.h>
 
 #define NPEOPLE 20
 
+#define EMPTY 0
+#define BOY 1
+#define GIRL 2
+
+static struct lock* bath_lk;
+static struct semaphore *bath_sem;
+static struct cv* boy_cv;
+static struct cv* girl_cv;
+static struct semaphore* finished_sem;
+static volatile int currently_serving = EMPTY;
+static volatile int boys_waiting = 0;
+static volatile int girls_waiting = 0;
+
+static
+void
+init(void)
+{
+    if (bath_sem==NULL) {
+        bath_sem = sem_create("bath_sem", 3);
+        if (bath_sem == NULL) {
+            panic("bathroom: Failed to create bath_sem\n");
+        }
+    }
+        
+    if (boy_cv==NULL) {
+        boy_cv = cv_create("boy_cv");
+        if (boy_cv == NULL) {
+            panic("bathroom: Failed to create boy_cv\n");
+        }
+    }
+
+    if (girl_cv==NULL) {
+        girl_cv = cv_create("girl_cv");
+        if (girl_cv == NULL) {
+            panic("bathroom: Failed to create girl_cv\n");
+        }
+    }
+    
+    if (bath_lk==NULL) {
+        bath_lk = lock_create("bath_lk");
+        if (bath_lk == NULL) {
+            panic("bathroom: Failed to create bath_lk\n");
+        }
+    }
+
+    if (finished_sem==NULL) {
+        finished_sem = sem_create("finished_sem", 0);
+        if (finished_sem == NULL) {
+            panic("bathroom: Failed to create finished_sem\n");
+        }
+    }
+}
 
 static
 void
 shower()
 {
 	// The thread enjoys a refreshing shower!
-        clocksleep(1);
+    clocksleep(1);
 }
+
+//Fairness policy attempts to avoid having unequal number of
+//boys and girls waiting if possible but to go ahead and
+//service whatever gender is already in the bathroom if the
+//bathroom is not full.
 
 static
 void
@@ -50,14 +108,34 @@ boy(void *p, unsigned long which)
 {
 	(void)p;
 	kprintf("boy #%ld starting\n", which);
+    lock_acquire(bath_lk);
+    // if the bathroom is full, is currently serving girls, or
+    // there are more girls waiting, then wait.
+    if(bath_sem->sem_count == 0 || currently_serving == GIRL || boys_waiting < girls_waiting)
+    {
+        boys_waiting++;
+        cv_wait(boy_cv,bath_lk);
+        boys_waiting--;
+    }
+    lock_release(bath_lk);
+    P(bath_sem);      
+    currently_serving = BOY;
 
-	// Implement this function
+    // use bathroom
+    kprintf("boy #%ld entering bathroom...\n", which);
+    shower();
+    kprintf("boy #%ld leaving bathroom\n", which);
 
-	// use bathroom
-	kprintf("boy #%ld entering bathroom...\n", which);
-	shower();
-	kprintf("boy #%ld leaving bathroom\n", which);
-
+    V(bath_sem);
+    if(bath_sem->sem_count == 3)
+        currently_serving = EMPTY;
+    lock_acquire(bath_lk);
+    if(boys_waiting > girls_waiting)
+        cv_broadcast(boy_cv,bath_lk);
+    else if(currently_serving != BOY)
+        cv_broadcast(girl_cv,bath_lk);
+    lock_release(bath_lk);
+    V(finished_sem);
 }
 
 static
@@ -66,14 +144,34 @@ girl(void *p, unsigned long which)
 {
 	(void)p;
 	kprintf("girl #%ld starting\n", which);
+    lock_acquire(bath_lk);
+    // if the bathroom is full, is currently serving boys, or
+    // there are more boys waiting, then wait.
+    if(bath_sem->sem_count == 0 || currently_serving == BOY || girls_waiting < boys_waiting)
+    {
+        girls_waiting++;
+        cv_wait(girl_cv,bath_lk);
+        girls_waiting--;
+    }
+    lock_release(bath_lk);
+    P(bath_sem);      
+    currently_serving = GIRL;
 
-	// Implement this function
-	
-	// use bathroom
-	kprintf("girl #%ld entering bathroom\n", which);
-	shower();
-	kprintf("girl #%ld leaving bathroom\n", which);
+    // use bathroom
+    kprintf("girl #%ld entering bathroom\n", which);
+    shower();
+    kprintf("girl #%ld leaving bathroom\n", which);
 
+    V(bath_sem);
+    if(bath_sem->sem_count == 3)
+        currently_serving = EMPTY;
+    lock_acquire(bath_lk);
+    if(girls_waiting > boys_waiting)
+        cv_broadcast(girl_cv,bath_lk);
+    else if(currently_serving != GIRL)
+        cv_broadcast(boy_cv,bath_lk);
+    lock_release(bath_lk);
+    V(finished_sem);
 }
 
 // Change this function as necessary
@@ -85,7 +183,7 @@ bathroom(int nargs, char **args)
 
 	(void)nargs;
 	(void)args;
-
+    init();
 
 	for (i = 0; i < NPEOPLE; i++) {
 		switch(i % 2) {
@@ -104,7 +202,9 @@ bathroom(int nargs, char **args)
 		}
 	}
 
+    for(i=0;i<NPEOPLE;i++) {
+        P(finished_sem);
+    }
 
 	return 0;
 }
-

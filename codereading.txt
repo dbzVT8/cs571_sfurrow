@@ -1,0 +1,24 @@
+Thread Questions
+1. When a thread exits, it is detached from the current process and then placed on the zombie threadlist, and then later destroyed when exorcise() is called. The thread is also setup to panic if it ever runs again before it dies. When a thread is put to sleep, it checks to make sure it isn't in an interrupt handler, is assigned to a wait channel, and is assigned the SLEEP state while yielding control to another thread.
+
+2. There are two functions that handle a context switch. The thread_switch() function in thread.c is the machine-independent code and switchframe_switch in switch.S is the machine-dependent portion which is called in thread_switch(), actually handles the context switch.
+
+3. There are four thread states: S_RUN, S_READY, S_SLEEP, and S_ZOMBIE. These states determine whether the thread is running, ready to run, sleeping, or a zombie.
+
+4. When interrupts are turned off, it means that the interrupt handler will not get called regardless if an interrupt is signaled. Interrupts are turned off using the splhigh() function and they are turned on using the spl0() function. It is important to turn off interrupts in thread subsystem code to ensure that thread operations are completed successfully. This will avoid situations such as being interrupted during a context switch where the thread is run before it is finished setting up its stack.
+
+5. When a thread wakes up another thread, it removes a sleeping thread from a wake channel and calls make_thread_runnable on it, which adds it to the end of the runqueue. When ever thread_switch() is called and this woken thread is returned by the scheduler, it can run again.
+
+
+Scheduler Questions
+1. The schedule() function is responsible for choosing the next thread. However it is not currently implemented.
+
+2. Since the schedule() function is not implemented, threads are chosen in a round-robin fashion by taking the next thread off of the runqueue.  
+
+3. The hardware timer's interrupt handler calls the hardclock() method every Hz seconds, and currently every 4th call to hardclock, schedule is called to reorder the threads in the runqueue. At the end of hardclock(), thread_yield() is called which forces the current thread to context switch to the next thread in the runqueue().
+
+
+Synchronization Questions
+1. The wchan_sleep() function is used in the semaphore's P function, which suspends the current thread until the semaphore count is greater than zero. The wchan_wakeone() is used in the semaphore's V function which wakes up all the suspended threads waiting on the current semaphore.
+
+2. The lock_do_i_hold() function checks if the current thread is holding the lock. This is useful for when a function needs to check if the lock is held when that function requires a lock as a precondition. Case-in-point, function A requires a lock and calls function B, lock_do_i_hold lets function B assert that the lock is indeed held. A lock_get_holder() function is not implemented because may allow a thread to overwrite the holder of the thread, which is not desirable.
