@@ -262,6 +262,8 @@ cv_destroy(struct cv *cv)
 void
 cv_wait(struct cv *cv, struct lock *lock)
 {
+    KASSERT(cv != NULL);
+    KASSERT(lock != NULL);
     if(lock_do_i_hold(lock)) {
         lock_release(lock);
         spinlock_acquire(&cv->spin_lock);
@@ -274,6 +276,8 @@ cv_wait(struct cv *cv, struct lock *lock)
 void
 cv_signal(struct cv *cv, struct lock *lock)
 {
+    KASSERT(cv != NULL);
+    KASSERT(lock != NULL);
     if(lock_do_i_hold(lock)) {
         spinlock_acquire(&cv->spin_lock);
         wchan_wakeone(cv->cv_wchan, &cv->spin_lock);
@@ -284,6 +288,8 @@ cv_signal(struct cv *cv, struct lock *lock)
 void
 cv_broadcast(struct cv *cv, struct lock *lock)
 {
+    KASSERT(cv != NULL);
+    KASSERT(lock != NULL);
     if(lock_do_i_hold(lock)) {
         spinlock_acquire(&cv->spin_lock);
         wchan_wakeall(cv->cv_wchan, &cv->spin_lock);
