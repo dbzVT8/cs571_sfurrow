@@ -171,7 +171,6 @@ lock_create(const char *name)
 void
 lock_destroy(struct lock *lock)
 {
-    KASSERT(lock != NULL);
     kfree(lock->lk_name);
     wchan_destroy(lock->lk_wchan);
     spinlock_cleanup(&lock->spin_lock);
@@ -265,8 +264,8 @@ cv_wait(struct cv *cv, struct lock *lock)
     KASSERT(cv != NULL);
     KASSERT(lock != NULL);
     if(lock_do_i_hold(lock)) {
-        lock_release(lock);
         spinlock_acquire(&cv->spin_lock);
+        lock_release(lock);
         wchan_sleep(cv->cv_wchan, &cv->spin_lock);
         spinlock_release(&cv->spin_lock);
         lock_acquire(lock);

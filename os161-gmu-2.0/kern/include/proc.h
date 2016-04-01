@@ -42,6 +42,13 @@
 struct addrspace;
 struct vnode;
 
+#ifndef PROCESSINLINE
+#define PROCESSINLINE INLINE
+#endif
+
+DECLARRAY(proc, PROCESSINLINE);
+DEFARRAY(proc, PROCESSINLINE);
+
 /*
  * Process structure.
  */
@@ -57,11 +64,21 @@ struct proc {
 	struct vnode *p_cwd;		/* current working directory */
 	struct filetable *p_filetable;	/* table of open files */
 
-	/* add more material here as needed */
+    pid_t p_pid;
+    struct proc* p_parent;
+    struct procarray p_children;
+    int p_exitstatus;
+    bool p_exitable;
+    struct lock* p_waitpid_lk;
+    struct cv* p_waitpid_cv;
 };
+
 
 /* This is the process structure for the kernel and for kernel-only threads. */
 extern struct proc *kproc;
+
+// This is the semaphore used to allow the kernel menu process to wait for all other processes to finish before continuing.
+extern struct semaphore* no_proc_sem;
 
 /* Call once during system startup to allocate data structures. */
 void proc_bootstrap(void);
@@ -87,5 +104,6 @@ struct addrspace *proc_getas(void);
 /* Change the address space of the current process, and return the old one. */
 struct addrspace *proc_setas(struct addrspace *);
 
+struct proc* proc_getProc(pid_t pid);
 
 #endif /* _PROC_H_ */

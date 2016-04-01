@@ -501,7 +501,14 @@ thread_fork(const char *name,
 	int result;
 
 
-	DEBUG(DB_THREADS,"Forking thread: %s\n",name);
+    if (proc != NULL)
+    {
+	    DEBUG(DB_THREADS,"Forking thread: %s for new process %u\n",name,proc->p_pid);
+    }
+    else
+    {
+	    DEBUG(DB_THREADS,"Forking thread: %s\n",name);
+    }
 
 	newthread = thread_create(name);
 	if (newthread == NULL) {

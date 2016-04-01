@@ -108,13 +108,10 @@ kill_curthread(vaddr_t epc, unsigned code, vaddr_t vaddr)
 		break;
 	}
 
-	/*
-	 * You will probably want to change this.
-	 */
+	kprintf("Fatal user mode trap %u sig %d (%s, epc 0x%x, vaddr 0x%x)\n",code, sig, trapcodenames[code], epc, vaddr);
 
-	kprintf("Fatal user mode trap %u sig %d (%s, epc 0x%x, vaddr 0x%x)\n",
-		code, sig, trapcodenames[code], epc, vaddr);
-	panic("I don't know how to handle this\n");
+    sys__exit(code);
+	panic("kill_curthread(): unexpected return from sys__exit()\n");
 }
 
 /*
@@ -367,6 +364,7 @@ mips_trap(struct trapframe *tf)
 void
 mips_usermode(struct trapframe *tf)
 {
+    DEBUG(DB_EXEC, "mips_usermode(): Entering\n");
 
 	/*
 	 * Interrupts should be off within the kernel while entering

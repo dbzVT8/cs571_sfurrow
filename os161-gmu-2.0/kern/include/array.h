@@ -82,6 +82,7 @@ ARRAYINLINE void array_set(const struct array *, unsigned index, void *val);
 int array_preallocate(struct array *, unsigned num);
 int array_setsize(struct array *, unsigned num);
 ARRAYINLINE int array_add(struct array *, void *val, unsigned *index_ret);
+ARRAYINLINE int array_setFirstAvail(struct array* a, void* val, unsigned* ret_index);
 void array_remove(struct array *, unsigned index);
 
 /*
@@ -124,6 +125,36 @@ array_add(struct array *a, void *val, unsigned *index_ret)
 		*index_ret = index;
 	}
 	return 0;
+}
+
+ARRAYINLINE int
+array_setFirstAvail(struct array* a, void* val, unsigned* ret_index)
+{
+    unsigned index;
+
+    // search array for the first NULL entry and
+    // assign item to that location
+    for (index = 0; index < a->num; index++)
+    {
+        if (a->v[index] == NULL)
+        {
+            a->v[index] = val;
+            *ret_index = index;
+            return 0;
+        }
+    }
+
+    // array is full, expand it and set item to end
+    index = a->num;
+    int ret = array_setsize(a, index+1);
+    if (ret)
+    {
+        return ret;
+    }
+    a->v[index] = val;
+    *ret_index = index;
+
+    return 0;
 }
 
 /*
@@ -180,6 +211,7 @@ array_add(struct array *a, void *val, unsigned *index_ret)
 	INLINE int ARRAY##_preallocate(struct ARRAY *a, unsigned num);	\
 	INLINE int ARRAY##_setsize(struct ARRAY *a, unsigned num);	\
 	INLINE int ARRAY##_add(struct ARRAY *a, T *val, unsigned *index_ret); \
+    INLINE int ARRAY##_setFirstAvail(struct ARRAY* a, T* val, unsigned* ret_index); \
 	INLINE void ARRAY##_remove(struct ARRAY *a, unsigned index)
 
 #define DEFARRAY_BYTYPE(ARRAY, T, INLINE) \
@@ -248,7 +280,13 @@ array_add(struct array *a, void *val, unsigned *index_ret)
 	{							\
 		return array_add(&a->arr, (void *)val, index_ret); \
 	}							\
-								\
+                                \
+    INLINE int                      \
+    ARRAY##_setFirstAvail(struct ARRAY* a, T* val, unsigned* ret_index) \
+    {                           \
+        return array_setFirstAvail(&a->arr, (void*)val, ret_index); \
+    }                           \
+                                \
 	INLINE void						\
 	ARRAY##_remove(struct ARRAY *a, unsigned index)		\
 	{							\

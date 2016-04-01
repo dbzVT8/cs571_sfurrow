@@ -135,6 +135,7 @@ runprogram(char *progname)
 	/* We should be a new process. */
 	KASSERT(proc_getas() == NULL);
 
+    DEBUG(DB_EXEC, "runprogram(): pid is %u, setting up filetable\n",curproc->p_pid);
 	/* Set up stdin/stdout/stderr if necessary. */
 	if (curproc->p_filetable == NULL) {
 		curproc->p_filetable = filetable_create();
@@ -161,6 +162,7 @@ runprogram(char *progname)
 	proc_setas(as);
 	as_activate();
 
+    DEBUG(DB_EXEC, "runprogram(): pid is %u, loading elf file\n",curproc->p_pid);
 	/* Load the executable. */
 	result = load_elf(v, &entrypoint);
 	if (result) {
@@ -179,6 +181,7 @@ runprogram(char *progname)
 		return result;
 	}
 
+    DEBUG(DB_EXEC, "runprogram(): pid is %u, warping to user mode\n",curproc->p_pid);
 	/* Warp to user mode. */
 	enter_new_process(0 /*argc*/, NULL /*userspace addr of argv*/,
 			  NULL /*userspace addr of environment*/,

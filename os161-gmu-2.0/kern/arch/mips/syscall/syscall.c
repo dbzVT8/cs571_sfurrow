@@ -37,6 +37,8 @@
 #include <current.h>
 #include <copyinout.h>
 #include <syscall.h>
+#include <addrspace.h>
+#include <proc.h>
 
 
 /*
@@ -193,9 +195,25 @@ syscall(struct trapframe *tf)
 			&retval);
 		break;
 
+	    /* process calls */
+        case SYS_getpid:
+        err = sys_getpid((pid_t*)&retval);
+        break;
 
-	    /* Even more system calls will go here */
+        case SYS__exit:
+        sys__exit(retval);
+        break;
 
+        case SYS_waitpid:
+        err = sys_waitpid((pid_t)tf->tf_a0,
+                         (userptr_t)tf->tf_a1,
+                         (int)tf->tf_a2,
+                         (pid_t*)&retval);
+        break;
+
+        case SYS_fork:
+        err = sys_fork(tf,(pid_t*)&retval);
+        break;
 
 	    default:
 		kprintf("Unknown syscall %d\n", callno);
@@ -241,7 +259,23 @@ syscall(struct trapframe *tf)
  * Thus, you can trash it and do things another way if you prefer.
  */
 void
-enter_forked_process(struct trapframe *tf)
+enter_forked_process(void *data1, unsigned long data2)
 {
-	(void)tf;
+    (void)data2;
+    struct trapframe* child_tf = ((void**)data1)[0];
+    struct addrspace* child_as = ((void**)data1)[1];
+    KASSERT(child_tf != NULL);
+    KASSERT(child_as != NULL);
+
+    struct trapframe stack_tf = *child_tf;
+    kfree(child_tf);
+
+    proc_setas(child_as);
+    as_activate();
+
+    stack_tf.tf_v0 = 0;
+    stack_tf.tf_a3 = 0;
+    stack_tf.tf_epc += 4;
+    mips_usermode(&stack_tf);
+    panic("enter_forked_process(): unexpected return from mips_usermode()");
 }

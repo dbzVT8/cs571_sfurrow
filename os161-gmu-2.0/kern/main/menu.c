@@ -44,6 +44,8 @@
 #include "opt-synchprobs.h"
 #include "opt-sfs.h"
 #include "opt-net.h"
+#include "synch.h"
+#include "proc.h"
 
 /*
  * In-kernel menu and command dispatcher.
@@ -127,22 +129,19 @@ common_prog(int nargs, char **args)
 		return ENOMEM;
 	}
 
-	result = thread_fork(args[0] /* thread name */,
-			proc /* new process */,
-			cmd_progthread /* thread function */,
-			args /* thread arg */, nargs /* thread arg */);
-	if (result) {
-		kprintf("thread_fork failed: %s\n", strerror(result));
-		proc_destroy(proc);
-		return result;
-	}
+    result = thread_fork(args[0] /* thread name */,
+            proc /* new process */,
+            cmd_progthread /* thread function */,
+            args /* thread arg */, nargs /* thread arg */);
+    if (result) {
+        kprintf("thread_fork failed: %s\n", strerror(result));
+        proc_destroy(proc);
+        return result;
+    }
 
-	/*
-	 * The new process will be destroyed when the program exits...
-	 * once you write the code for handling that.
-	 */
+    P(no_proc_sem);
 
-	return 0;
+    return 0;
 }
 
 /*
