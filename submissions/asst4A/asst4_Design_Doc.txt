@@ -1,0 +1,190 @@
+Shawn Furrow
+3/28/2016
+Assignment 4 Design Document
+
+Answers to Code Questions:
+ELF Questions:
+1. What are the ELF magic numbers? 
+
+The ELF magic numbers are the first 4 bytes of e_ident which identifies how the file should be interpreted.
+
+2. What is the difference between UIO_USERISPACE and UIO_USERSPACE? When should one use UIO_SYSSPACE instead?
+
+UIO_USERISPACE is used to represent user process code and UIO_USERSPACE is used to represent user process data. One should use UIO_SYSSPACE when writing data to a kernel buffer.
+
+3. Why can the struct uio that is used to read in a segment be allocated on the stack in load_segment() (i.e., where does the memory read actually go)?
+
+The uio struct can be allocated on the stack because the uio struct stores the result of its reads in its iovec iov_ubase pointer. Before the read, this pointer is set to the vaddr pointer that is passed into load_segment().
+
+4. In runprogram(), why is it important to call vfs_close() before going to usermode?
+
+It is important to call vfs_close() before going to usermode because the program file is no longer needed. If vfs_close() is not called, the device's vnode will still hold a reference and thus cannot ever be reclaimed.
+
+5. What function forces the processor to switch into usermode? Is this function machine dependent?
+
+The enter_new_process() function in trap.c is responsible for switching the processor into usermode. Yes, this function is machine dependent.
+
+6. In what file are copyin and copyout defined? memmove? Why can't copyin and copyout be implemented as simply as memmove?
+
+The copyin and copyout functions are defined in copyinout.c and memmove is defined in memmove.c. The reason copyin and copyout can't be implemented as simply as memmove is because copyin and copyout are meant to copy to/from userspace and the kernel so there is extra logic involved to make sure that userspace addresses are truly within the userspace address limits and that they do not cross over into the kernel's address space.
+
+7. What (briefly) is the purpose of userptr_t?
+
+It is used for noting that the provided address needs to be within the proper userspace memory region.
+
+
+Trap/Syscall Questions:
+1. What is the numerical value of the exception code for a MIPS system call?
+
+The numerical value of the exception code for a MIPS system call is defined as EX_SYS which is set to the value of 8.
+
+2. How many bytes is an instruction in MIPS? (Answer this by reading syscall() carefully, not by looking somewhere else.)
+
+A MIPS instruction is 4 bytes, the amount the program counter is incremented before syscall returns.
+
+3. Why do you "probably want to change" the implementation of kill_curthread()?
+
+It is not desirable for the kernel to panic when user-level code hits a fatal fault.
+
+4. What would be required to implement a system call that took more than 4 arguments?
+
+Additional arguments would need to be fetched from the user-level stack starting at sp+16.
+
+
+MIPS Questions:
+1. What is the purpose of the SYSCALL macro?
+
+The SYSCALL() macro allows for a single shared system call dispatcher by loading a number into the v0 register and jumping to the shared code.
+
+2. What is the MIPS instruction that actually triggers a system call?
+
+The syscall instruction on line 85 of syscalls-mips.S is the instruction that actually triggers a system call.
+
+3. After reading syscalls-mips.S and syscall.c, you should be prepared to answer the following question: Now that OS/161 supports 64-bit values, lseek() takes and returns a 64-bit offset value. Thus, lseek() takes a 32-bit file handle (arg0), a 64-bit offset (arg1), a 32-bit whence (arg3), and needs to return a 64-bit offset value. In void syscall(struct trapframe *tf) where will you find each of the three arguments (in which registers) and how will you return the 64-bit offset?
+
+The first four arguments must be passed in registers a0-a3 and 64-bit arguments must be in aligned registers. This means arg0 of lseek() will be in a0, arg1 in registers a2 and a3, and arg2 will be on the user level stack at sp+16. The 64-bit return value will be stored across registers v0 and v1.
+
+
+High Level Description/Approach Methodology:
+=======================================================
+
+When starting to work on this project, naturally, I decided to complete the code reading questions to gain a general overview of the various pieces of the code and how they all fit together. After going through the code reading questions, I began to look at the reboot system call since it was the only one that was implemented that already had a test program written and also did not depend on the _exit() system call. In order to truly understand how the system call structure was layed out, I followed the entire system call path from userland in the reboot test main, through the assembly code in syscalls.S, then into the exception_mips1.S file where system calls are handled, then into mips_trap(tf) where the trapframe is created the syscall(tf) function is called. Finally, I followed the code into the reboot kernel level system call, back into syscalls.S, and then I observed where execution warps back int usermode where reboot was originally called. This entire sequence was tedious but it really helped me understand the entire system call flow.
+
+After looking into the system call execution path, I then looked at the 4 system calls that were required to be implemented for this assignment, getpid(), waitpid(), fork(), and _exit(). It was after looking at these that I began to think about my general design.
+
+I decided that the best approach was to first figure out what a information should be contained in a process and how to keep track of all the processes in the system using pids. The obvious decision was that a global process table needed to be implemented. To make things easy, this process table would simply be a resizable array that holds all the processes indexed by their pids. The first process, the kernel's menu process, would be assigned a pid of 0 and all processes afterwards would be assigned the next pid available in the process table. The decision to make the process table a resizable array was based off of the fact that the array.h file already contained the interface for doing this, so I used this.
+
+I also decided that for simplicity, all processes will only have one thread. This allowed me to not have to synchronize the threads within a process and to take advantage of thread_fork() as part of process creation. With this design, the existing logic for thread states and scheduling can be leveraged directly. The process handles the file system, address space, parent/child relations, and wait/exit logic, and the thread handles actual execution and context switching.
+
+
+Detailed Description of Implementation:
+=======================================================
+
+a) Process structure and PID management:
+
+The fields that I added to the existing proc structure are defined below: 
+
+struct proc {
+... (existing fields) ...
+    pid_t p_pid;
+    struct proc* p_parent;
+    struct procarray p_children;
+    int p_exitstatus;
+    bool p_exitable;
+    struct lock* p_waitpid_lk;
+    struct cv* p_waitpid_cv;
+};
+
+A process will hold its pid, a pointer to its parents proc structure, an array of children proc structures, and exit status, whether the process can be allowed to exit, and a lock/cv combo used for the waitpid system call.
+
+For PID and process management, I created a global process table and associated write lock. As mentioned before, I used the existing array.h interface to define a procarray structure and it's associated procarray_* methods. The structs were defined in kern/proc/proc.c like so:
+
+static struct procarray proc_table;
+struct lock* ptable_lk;
+
+Also, in order to manage how pids were assigned and recycled, an additional function was added to the array.h interface called array_setFirstAvail(). This function was modeled off of array_set() but the main difference is that the value gets added to the first available slot in the array. If there are none available, then the array is extended and the value is added to the end. This way, whenever a process exits and it PID is no longer needed, the proc structure is destroyed at the index of the proc_table and set to NULL so that the next process created will take this PID. Below is the added array_setFirstAvail() function:
+
+
+ARRAYINLINE int
+array_setFirstAvail(struct array* a, void* val, unsigned* ret_index)
+{
+    unsigned index;
+
+    // search array for the first NULL entry and
+    // assign item to that location
+    for (index = 0; index < a->num; index++)
+    {
+        if (a->v[index] == NULL)
+        {
+            a->v[index] = val;
+            *ret_index = index;
+            return 0;
+        }
+    }
+
+    // array is full, expand it and set item to end
+    index = a->num;
+    int ret = array_setsize(a, index+1);
+    if (ret)
+    {
+        return ret;
+    }
+    a->v[index] = val;
+    *ret_index = index;
+
+    return 0;
+}
+
+An additional helper function was created in proc.c to retreive a proc struct from the process table by pid. Here is the function below:
+
+struct proc*
+proc_getProc(pid_t pid)
+{
+    struct proc* ret = NULL;
+    lock_acquire(ptable_lk);
+    for (unsigned i=0; i<procarray_num(&proc_table); i++)
+    {
+        ret = procarray_get(&proc_table, i);
+        if (ret->p_pid == pid)
+        {
+            break;
+        }
+    }
+    lock_release(ptable_lk);
+    return ret;
+}
+
+Finally, I constructed a mechanism to allow the kernel process (pid 0) to wait for all processes to finish before returning back to the menu. This was done by creating a static global variable called num_processes to keep track of all of the processes in the system except the kernel process and then using a semaphore called no_proc_sem that is initialized to 0 and signaled only when the number of processes goes down to 0. Then, in the common_prog() method in kern/main/menu.c the kernel process waits on the no_proc_sem after the call to thread_fork().
+
+
+b) System call design
+
+All of the four system calls implemented for this assignment were added to a new file called proc_syscalls.c located in the kern/syscall directory.
+
+getpid():
+The implementation of getpid was trivial and it simply returns curproc->p_pid.
+
+waitpid():
+For waitpid(), I get the child pid from the proc_table, and then wait on the waitpid cv until the child's p_exitable flag is true. I then copy the child's exit status to the user mode status pointer and return the child's pid by assigning it to the retval pointer passed in. The error code is returned if there is one.
+
+_exit():
+For _exit() I simply destroy and deactivate the address space of the current process, remove its associated thread, set its p_exitstatus using _MKWAIT_EXIT(exitcode), set its p_exitable to true, broadcast to all waiting threads that this process is exiting, and then I destroy the proc struct and exit the thread. Note: the num_processes count is decremented when proc_destroy() is called.
+
+fork():
+For fork(), I first create a new proc struct for the child using proc_fork() and copy the parents name concatenated with "_c" to the childs p_name. Then, I allocate space on the kernel heap for the child's address space and trapframe and then copy the current process's address space into the child's address space using as_copy() and copy the parent's trapframe to the child's trapframe using memcpy(). Next, I copy the parent's filetable to the child's filetable using filetable_copy(). Then, I assign the child's parent proc to the current process and I add the childs proc structure to the current process's children array. Finally, I call thread_fork() by passing the child process's trapframe and address space into the parameters to get passed on to the thread's entrypoint function enter_forked_process(). When thread_fork returns in the parent process, I set retval to the child's pid and return. The child "returns" by modifying the child's trapframe in enter_forked_process() to return 0 and to advance the program counter to the next instruction.
+
+
+Discussion of Pros and Cons:
+=======================================================
+The biggest advantage of my approach to assume only single-threaded user processes was simplicity. If time allowed it is obvious that multi-threaded user processes is desired but since it was not required, it wasn't implemented. Additionally, my decision to reuse the array.h interface as described in the high-level description for the process table allowed for a theoretically unlimited number of processes in the system. My decision to index the process table by pid also simplified things as well.
+
+On the contrary, it is also a disadvantage to not have multi-threaded user processes because it severly limits the capabilities of the programs that can run on OS161.
+
+
+Alternatives Considered:
+=======================================================
+The main alternatives explored were the implementation of multi-threaded user processes, using a linked list or fixed-sized array for the process table, completely doing away with the proc structure and simply adding functionality to the thread structure. The reason multi-threaded user processes were not implemented was (as stated above) due to simplicity and lack of time. The idea to use a linked list for the process table was discarded because the creation of linked-list and it's associated helper methods seemed like more work and more error-prone than using already tested code. Likewise, the idea to use a fixed-size array for the process table was discarded because it limits the number of processes that can exist on the system. Finally, the idea of completely doing away with the proc structure was tempting because it greatly simplified some things, but was ultimately discarded because a majority of the groundwork for processes was already implemented.
+
+Notes:
+=======================================================
+On the question posed in the assignment description about whether two user processes can find themselves running a system call at the same time, I believe that they cannot if the two processes are running on the same processor. This is because system calls occur through an exception or trap which can only be processed one at a time per processor. If the two user processes were on different processors, then I believe it is possible for both of them to be executing a system call at the same time.

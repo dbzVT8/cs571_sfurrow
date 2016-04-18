@@ -1,0 +1,12 @@
+Successfully tested using:
+testbin/add
+testbin/sty *
+testbin/badcall (for execv and waitpid)
+testbin/multiexec
+tt1
+tt2
+tt3
+testbin/forktest
+testbin/palin
+
+* did not wait for full version of sty to finish, but shorted loop in hog and it finished successfully

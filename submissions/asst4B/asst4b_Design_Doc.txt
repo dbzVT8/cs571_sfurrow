@@ -1,0 +1,45 @@
+Shawn Furrow
+4/8/2016
+Assignment 4b Design Document
+
+
+High Level Description/Approach Methodology:
+=======================================================
+Since I was able to successfully complete Assignment 4A, I immediately began this assignment with the execv system call and argument passing designs. The design of execv() was somewhat modeled off of existing runprogram() method except execv() needed to deal with the user space to kernel space conversion since the execv() call is usually made from user programs. For argument passing, I first looked at the Assignment 4B hints and execv manual pages to understand how the arguments are expected to be organized then I wrote out an argument example and placed the arguments into addresses on paper to get an even deeper understanding.
+
+
+Detailed Description of Implementation:
+=======================================================
+a) execv system call:
+The main steps that my execv() system call takes are:
+1. allocate memory to hold program path
+2. copy user path into kernel
+3. figure out how many arguments there are
+4. copy argv arguments from user space to kernel space
+5. open the program file
+6. create a new address space and replace this process's existing address space with it
+7. load the program executable file into entrypoint and then close it
+8. define the new user stack for the process
+9. allocate space for copied arguments to be placed on the new user stack
+10. copy the arguments backwards into the stack since the stack grows downwards
+11. make sure the stack pointer is 4-byte aligned since the argument strings that were placed on the stack could cause the stack pointer to end up unaligned
+12. make sure the stack pointer is 8-byte aligned after inserting the argv pointer
+13. deallocate all temporary variables used
+14. warp to user mode by calling enter_new_process
+15. panic if enter_new_process returns
+
+b) argument passing details:
+As stated in the assignment description, argument passing was the most difficult portion of this assignment. Getting all of the arguments from user space into kernel space and laying out all the arguments in the stack were the most tedious parts. The main design decision was to place the arguments onto the user space stack in the process's new address space. As can be gleaned from the execv steps above, my argument passing first involves finding out the number of arguments by looping through argv until NULL is reached. Then, space is allocated for the arguments in kernel space. Next, a for loop through the arguments is used to first check to make sure each argument is valid by making a dummy call to copyin(), then using copyinstr() to actually copy the argument character arrays. After all the arguments are processed, a NULL is appended to the end of the kernel argv. The most difficult portion of argument passing was realizing that the arguments needed to be copied onto the stack backwards since the stack grows downwards and implementing the stack 4-byte and 8-byte alignment code. 
+
+c) runprogram changes:
+As hinted in the assignment description, the runprogram() method needed to be changed to support argument passing from the kernel menu to the first process run by the kernel. Argument passing was basically modeled after the execv() system call but the user to kernel space portion in execv() was not necessary for runprogram().
+
+
+Discussion of Pros and Cons:
+=======================================================
+There really aren't very many pros and cons to discuss since the execv() system call is pretty rigid and there really is only one way to do most of the things that needed to be done. The user space to kernel space portion needed to use the methods in copyinout.c and the argument passing was pretty strict because the arguments had to be organized in a very specific way.
+
+
+Alternatives Considered:
+=======================================================
+There were really no alternatives considered as the designs for execv() and argument passing were pretty much either right or wrong. There is very little leeway in the design since the arguments have to be laid out in a very specific way and execv() is pretty well defined in it's manual page.

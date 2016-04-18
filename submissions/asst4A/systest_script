@@ -1,0 +1,76 @@
+Script started on Mon 28 Mar 2016 10:17:06 PM EDT
+[?1034hbash-4.1$ ~/runOS.sh 
+sys161: System/161 release 2.0.2, compiled Feb  2 2015 11:24:13
+
+OS/161 base system version 2.0
+Copyright (c) 2000, 2001-2005, 2008-2011, 2013, 2014
+   President and Fellows of Harvard College.  All rights reserved.
+
+Put-your-group-name-here's system version 0 (ASST4a #83)
+
+1804k physical memory available
+Process [kernel] pid: 0
+proc_create(): proc_table entry 0 has pid 0
+Device probe...
+lamebus0 (system main bus)
+emu0 at lamebus0
+ltrace0 at lamebus0
+ltimer0 at lamebus0
+beep0 at ltimer0
+rtclock0 at ltimer0
+lrandom0 at lamebus0
+random0 at lrandom0
+lhd0 at lamebus0
+lhd1 at lamebus0
+lser0 at lamebus0
+con0 at lser0
+
+cpu0: MIPS/161 (System/161 2.x) features 0x0
+cpu1: MIPS/161 (System/161 2.x) features 0x0
+OS/161 kernel [? for menu]: p testbin/systest
+Creating process testbin/systest from pid 0
+Process testbin/systest pid: 1
+proc_create(): proc_table entry 0 has pid 0
+proc_create(): proc_table entry 1 has pid 1
+Forking thread: testbin/systest for new process 1
+Operation took 0.426043320 seconds
+OS/161 kernel [? for menu]: runprogram(): pid is 1, setting up filetable
+runprogram(): pid is 1, loading elf file
+ELF: Loading 1072 bytes to 0x400000
+ELF: Loading 0 bytes to 0x440430
+runprogram(): pid is 1, warping to user mode
+mips_usermode(): Entering
+sys_fork(): entering
+Creating process testbin/systest from pid 1
+Process testbin/systest pid: 2
+proc_create(): proc_table entry 0 has pid 0
+proc_create(): proc_table entry 1 has pid 1
+proc_create(): proc_table entry 2 has pid 2
+sys_fork(): copying address space...
+sys_fork(): copying trapframe space...
+sys_fork(): copying filetable...
+sys_fork(): assigning child process's parent as this process...
+sys_fork(): adding child to children procarray...
+sys_fork(): allocating data...
+Forking thread: testbin/systest_c for new process 2
+sys_fork(): thread_fork returned: curproc=1, child_proc=2
+sys_waitpid(): process 1 waiting on 2
+sys_waitpid(): process 2 exitable before wait is 0
+mips_usermode(): Entering
+sys_exit(): process 2 exiting with code 0
+sys_exit(): process 1 exiting with code 0
+
+OS/161 kernel [? for menu]: q
+Shutting down.
+The system is halted.
+cpu1: offline.
+sys161: 441260602 cycles (103775931 run, 337484671 global-idle)
+sys161:   cpu0: 20841192 kern, 72 user, 93251 idle; 27397 ll, 27397/0 sc, 84225 sync
+sys161:   cpu1: 1448364 kern, 0 user, 19486151 idle; 344 ll, 344/0 sc, 1395 sync
+sys161: 4143 irqs 13 exns 0r/0w disk 21r/2068w console 8r/0w/3m emufs 0r/0w net
+sys161: Elapsed real time: 14.415896 seconds (30.6093 mhz)
+sys161: Elapsed virtual time: 17.654713943 seconds (25 mhz)
+/home/sfurrow/cs571_sfurrow/submissions
+bash-4.1$ exit
+
+Script done on Mon 28 Mar 2016 10:17:27 PM EDT
